@@ -1,0 +1,1 @@
+{"name":"@fivebones/extension","private":true,"version":"1.0.0","scripts":{"build":"node build.mjs && python3 package.py"},"dependencies":{"react":"19.0.0","react-dom":"19.0.0","@fivebones/ui":"workspace:*"}}

@@ -1,0 +1,26 @@
+{
+  "name": "five-bones",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "dev": "vite web --host 0.0.0.0",
+    "build": "pnpm build:web && pnpm build:extension",
+    "test": "playwright test",
+    "build:web": "vite build web",
+    "build:extension": "node extension/build.mjs && python3 extension/package.py",
+    "typecheck": "tsc --noEmit",
+    "test:contracts": "node --experimental-strip-types --test tests/endpoints.test.mjs"
+  },
+  "dependencies": {
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.0.8",
+    "@types/react-dom": "19.0.3",
+    "@playwright/test": "1.51.1",
+    "esbuild": "0.25.0",
+    "typescript": "5.7.3",
+    "vite": "6.1.0"
+  }
+}

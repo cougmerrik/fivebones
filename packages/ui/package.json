@@ -1,0 +1,1 @@
+{"name":"@fivebones/ui","private":true,"version":"1.0.0","exports":{".":"./App.tsx"},"dependencies":{"react":"19.0.0","@fivebones/contracts":"workspace:*"}}

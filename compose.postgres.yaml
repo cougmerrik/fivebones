@@ -1,0 +1,25 @@
+# Optional local PostgreSQL. Use together with compose.yaml, not on an existing SQLite game without migration.
+services:
+  postgres:
+    image: postgres:16.8-alpine
+    environment:
+      POSTGRES_USER: fivebones
+      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_DB: fivebones
+    ports:
+      - '127.0.0.1:15432:5432'
+    volumes:
+      - bones-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fivebones -d fivebones']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  api:
+    environment:
+      DATABASE_URL: postgresql://fivebones:local-development-only@postgres:5432/fivebones
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  bones-postgres:

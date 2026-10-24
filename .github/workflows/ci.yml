@@ -1,0 +1,65 @@
+name: Five Bones checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16.8-alpine
+        env:
+          POSTGRES_USER: fivebones
+          POSTGRES_PASSWORD: ci-test-only
+          POSTGRES_DB: fivebones_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fivebones -d fivebones_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24.14.0'
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: python -m venv .venv
+      - run: .venv/bin/pip install -r server/requirements.lock
+      - run: PYTHONPATH=server .venv/bin/pytest server/tests -q
+        env:
+          TEST_DATABASE_URL: postgresql://fivebones:ci-test-only@localhost:5432/fivebones_test
+      - run: pnpm typecheck && pnpm test:contracts
+      - run: pnpm build
+      - name: Build independent production images
+        run: |
+          docker build -f server/Dockerfile -t fivebones-api:ci .
+          docker build -f web/Dockerfile -t fivebones-web:ci --build-arg VITE_API_BASE_URL=https://api.example --build-arg VITE_WS_BASE_URL=wss://api.example .
+      - name: Production port, health and persistent restart checks
+        env:
+          SMOKE_API_ORIGIN: http://localhost:18080
+          SMOKE_BROWSER_ORIGIN: https://web.example
+          SMOKE_HOST_SECRET: ci-only-creation-secret-32-characters
+          SMOKE_RESTART_CONTAINER: fivebones-api-ci
+        run: |
+          docker run -d --name fivebones-api-ci --network host -e PORT=18080 -e APP_ENV=production -e DATABASE_URL=postgresql://fivebones:ci-test-only@localhost:5432/fivebones_test -e APP_BASE_URL=https://web.example -e ALLOWED_ORIGINS=https://web.example -e WS_ALLOWED_ORIGINS=https://web.example -e HOST_INVITE_SECRET="$SMOKE_HOST_SECRET" fivebones-api:ci
+          docker run -d --name fivebones-web-ci -p 127.0.0.1:18081:19081 -e PORT=19081 fivebones-web:ci
+          curl --fail --retry 15 --retry-connrefused --retry-delay 1 http://localhost:18081/health
+          .venv/bin/python tests/container_smoke.py
+      - name: Remove verification containers
+        if: always()
+        run: docker rm -f fivebones-api-ci fivebones-web-ci 2>/dev/null || true
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test
+      - name: Extension build artifact (local development endpoint)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: fivebones-extension-local-build
+          path: extension/fivebones-extension.zip
+          retention-days: 7

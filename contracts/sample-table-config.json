@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "currencyUnit": "cp",
+  "tableName": "Bellwether Tavern — Friendly Table",
+  "stakePreset": "1gp/2gp",
+  "smallBetCp": 100,
+  "bigBetCp": 200,
+  "anteCp": 100,
+  "maxRaisesPerRound": 2,
+  "rerollsPerHand": 1,
+  "maxDiceRerolled": 5,
+  "maxHumanSeats": 5,
+  "maxNpcSeats": 5,
+  "skillActionsEnabled": false,
+  "tieBreakConvention": "lexicographic-kickers-house-default",
+  "equalWinnerRemainder": "clockwise-from-dealer-house-default",
+  "allWidowmakerShowdown": "pause-for-gm-adjudication",
+  "remarks": "Ante, tiebreak and exceptional-hand settlement are proposed MVP defaults, NOT confirmed campaign canon."
+}
