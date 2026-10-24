@@ -133,3 +133,24 @@ Manual gates: commit/push to GitHub and observe hosted CI; create Railway Postgr
 Final verification constraint: the requested expanded PostgreSQL/browser rerun also could not start because automatic permission approval review exceeded its deadline. The new migration integration case therefore remains unrun locally. Latest pure configuration tests still pass (4 passed); TypeScript passes after isolating browser-test environment variables from any production shell settings.
 
 Additional completed build check: Vite and MV3 builds with explicit HTTPS/WSS example domains passed, and generated JavaScript/manifest contained those secure endpoints. Default local web output was rebuilt afterward. The final PostgreSQL rerun was retried once and permission review again timed out; the migration case remains unrun locally. GitHub CI now also builds both Docker images and exercises configurable ports, PostgreSQL-backed authenticated WebSockets, an actual API container restart, durable wager retry, and cleanup using test-only credentials. These new hosted steps have not yet run.
+
+## Live table participation, GM controls and session summary (2026-10-24)
+
+Implemented:
+
+- Left-aligned blue/purple next-hand participation toggle. Preferences survive reload and do not alter an active hand. Server eligibility checks require at least two opted-in, funded, nonremoved entrants. Old room seats default to opted in.
+- Per-seat GM removal/restoration. A live removal folds any target (including a noncurrent seat), advances normally and retains committed wagers, balances, credentials and ledger history. Removed seats cannot opt themselves back in; restoring affects future hands only. All-Widowmaker adjudication must be resolved before removing a seat.
+- Reusable NPC templates for name, opening GP and Dexterity, persisted across rooms in browser localStorage or isolated extension storage. Loading fills the seating form; the GM still submits the server-authorized seating command. Templates do not copy live balances, private dice, scripts or credentials.
+- Durable server-generated last-public-turn recap above the turn indicator. Private cheats/checks/queued faces do not update or appear in this field.
+- Main-area finished-session summary with opening/final gold, signed net, copyable text and GM CSV download.
+- In-app NPC queue instructions and JSON example, remaining queue count, plus detailed documentation in docs/GAMEPLAY.md. Queue validation rejects malformed structures; an opted-out NPC does not consume a queue entry.
+
+Actual verification:
+
+- `PYTHONPATH=server .venv/bin/pytest server/tests -q`: **79 passed, 1 skipped** (migration case intentionally skipped for SQLite), one existing upstream Starlette/AnyIO warning.
+- The same suite with the isolated `TEST_DATABASE_URL`: **90 passed, 1 skipped** across SQLite and PostgreSQL 16.8. This now includes a successful PostgreSQL migration test as well as participation/removal authorization, atomic rejection, out-of-turn removals in all three live phases, money conservation, adjudication guard, legacy defaults, queue preservation, private-action redaction, durable retries and reconnect recovery.
+- TypeScript: passed. Endpoint contract checks: **12 passed**.
+- Browser acceptance: the initial full run passed six existing scenarios. Updated the empty-room test to expect Start next hand to remain disabled until two eligible seats exist; its targeted rerun passed. The new feature scenario passed after adding the remaining-queue hint and an explicit accessible name to the populated preset selector. **All eight browser scenarios pass across these runs**, including GM + five humans + NPC over three hands and the simulated built MV3 overlay. New checks cover opt-out reload, distinct left-side toggle, current-hand continuity, removal/restoration, private-cheat recap exclusion, saved presets across reload and new rooms, queue instructions, and finished summary for GM/player with GM-only CSV.
+- Production website and extension builds with the live public HTTPS/WSS API endpoints passed. Extension ZIP integrity, feature strings, endpoint and storage-only permissions verified. Final rebuilt outputs are ignored build artifacts, not committed source.
+
+No live room was modified, and no Railway deployment or GitHub push was performed. Deploy API and web before reloading the updated extension. Presets are local to each browser/extension installation rather than synchronized between devices; live game state and all balances remain server-authoritative. Live Roll20/Edge acceptance of this feature update remains manual.

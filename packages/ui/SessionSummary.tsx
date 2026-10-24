@@ -1,0 +1,7 @@
+import React from 'react';
+import {State} from '../contracts';
+const gold=(cp:number)=>(cp/100).toFixed(2)+' gp';
+export function SessionSummary({state,copy,exportCSV}:{state:State;copy:(text:string)=>void;exportCSV:()=>void}) {
+ const lines=state.seats.map(s=>`${s.name}: starting ${gold(s.opening)}, final ${gold(s.balance)}, net ${s.balance-s.opening>0?'+':''}${gold(s.balance-s.opening)}.`);
+ return <section className="session-summary" aria-label="Final session summary"><h2>Session finished</h2><p>{state.hand} {state.hand===1?'hand':'hands'} played · {state.seats.length} participants</p><div className="summary-scroll"><table><caption>Final gold and net change</caption><thead><tr><th scope="col">Participant</th><th scope="col">Started</th><th scope="col">Finished</th><th scope="col">Net</th></tr></thead><tbody>{state.seats.map(s=>{const net=s.balance-s.opening;return <tr key={s.id}><th scope="row">{s.name}{s.npc?' · NPC':''}</th><td>{gold(s.opening)}</td><td>{gold(s.balance)}</td><td className={`ledger-net ${net<0?'loss':net>0?'gain':'neutral'}`}>{net>0?'+':''}{gold(net)}</td></tr>})}</tbody></table></div><p className="hint">Use these final totals to update character sheets manually.</p><div className="actions"><button onClick={()=>copy(lines.join('\n'))}>Copy session summary</button>{state.role==='gm'&&<button onClick={exportCSV}>Download session CSV</button>}</div></section>
+}

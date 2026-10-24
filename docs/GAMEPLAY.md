@@ -39,3 +39,35 @@ Dice visuals use the supplied root assets `pip1.png` through `pip6.png`, bundled
 The game area shows `Ante → Betting 1 → Reroll → Betting 2 → Showdown → Next Hand`, with the server’s current stage highlighted and the current hand centered beneath it. Ante preparation maps to the lobby; ordinary ante/roll/showdown/settlement operations are atomic server transitions, so normal hands move directly to the next stable stage. An all-Widowmaker adjudication highlights Showdown until the GM resolves it. No client timer delays actions or changes authoritative phases.
 
 On wide app surfaces, private actions sit beside the compact table so they can remain visible with the title. Narrow app/extension panels stack them below the table. The private sidebar can scroll independently when its contents grow. Roster dice are centered within their seat cards. Connection & room follows the private-action area, retaining its collapsed player default and right-aligned status.
+
+## Participation and absent players
+
+The blue button at the left of the game toolbar lets a player choose **Sit out next hand**. When sitting out, the purple **Join next hand** button opts back in. The preference persists across hands and reloads. Using it during a live hand does not fold the current dice or remove existing wagers. Roster cards show everyone's next-hand status; the GM needs at least two eligible participants to start.
+
+The GM has per-seat **Remove … from play** and **Restore …** controls. Removing an active seat folds it immediately, preserves committed gold in the pot, and moves play along. It stays out until the GM restores it. The seat and its ledger remain available for settlement; restoring affects future hands only. Resolve an all-Widowmaker adjudication before removing a seat from that hand.
+
+## Reusable NPC presets
+
+Under **settings → Saved NPC presets**, fill in the NPC name, starting GP and Dexterity and click **Save NPC preset**. Choose a saved name and click **Load NPC preset** to fill the form, then **Seat NPC** to add it to this room. Saving an existing name updates that template. Templates persist across rooms in this browser or extension; website and extension storage are separate. They do not carry a previous NPC's final balance, dice, scripts, or active seat identity into a new game.
+
+## Queued NPC rolls
+
+1. Seat an NPC and open **settings → Authorize scripted NPC rolls (audit logged)**.
+2. Select that NPC. Enter a JSON list, one entry for each future hand the NPC will enter:
+
+```json
+[
+  {"initial": [2, 2, 2, 4, 6], "replacements": [2, 5]},
+  {"initial": [1, 2, 3, 4, 5], "replacements": []}
+]
+```
+
+3. Click **Authorize NPC queue**. Authorization replaces the remaining queue and is recorded privately for the GM. Enter `[]` to clear it.
+4. Start the next hand. Its first entry supplies the NPC's five initial dice; the following entry is saved for its next participating hand. Sitting out does not consume an entry.
+5. Play the NPC's betting turn normally. During its one reroll, choose dice to replace. Replacement values are used left to right in your submitted index order; extra selected dice use fair server rolls after the stream runs out. A loaded slot uses the loaded probability instead of consuming a scripted replacement.
+
+An initial roll needs exactly five integers from 1 through 6. Each replacement list may contain zero through five such integers; the queue may contain up to ten hands. Script authorization does not change a hand already in progress. Opponents cannot see queued faces. The GM still decides NPC wagers, folds and reroll selections; queues do not automate those actions.
+
+## Turn and session recaps
+
+**What just happened** appears above the current turn and describes the last public action. It uses the authoritative server state and never exposes private cheat details. When the GM chooses **End session** between hands, the main game area shows every participant's starting/final gold and signed net, with copyable settlement text and GM CSV download. Completed summaries survive reload.

@@ -86,7 +86,7 @@ class Command(Strict):
     data: dict=Field(default_factory=dict)
 
 # Exact input shapes prevent silently accepting client-supplied dice or money.
-SHAPES={'startHand':set(),'endSession':set(),'fold':set(),'check':set(),'call':set(),'bet':set(),'raise':set(),
+SHAPES={'setParticipation':{'seatId','participating'},'removeSeat':{'seatId','confirmed'},'restoreSeat':{'seatId'},'startHand':set(),'endSession':set(),'fold':set(),'check':set(),'call':set(),'bet':set(),'raise':set(),
         'setReroll':{'indexes'},'addNPC':{'name','startingCp','dexterity'},'scriptNPC':{'seatId','queue'},
         'setAbilities':{'dexterity'},'setNPCDexterity':{'seatId','dexterity'},'requestNPCCheat':{'kind','dieIndex','face','description'},'requestCheat':{'kind','dieIndex','face','description'},
         'gmChangeDie':{'seatId','dieIndex','face','reason'},'rollCheatCheck':{'requestId','ability'},

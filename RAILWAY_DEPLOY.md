@@ -18,19 +18,28 @@ Create/connect your GitHub repository first if it has no remote. `.env`, databas
 
 Create a Railway project and add **PostgreSQL**. Add two services connected to this same GitHub repository/branch, named `api` and `web`.
 
-Set these service settings explicitly:
+Railway may automatically import JavaScript workspace packages as services. Keep `web`; repurpose `contracts` as `api` or create an empty service and connect it to this repository. Remove the extra `ui` and `extension` Railway services. Keep their source folders in GitHub: they are build dependencies, not separately hosted applications.
+
+Set these service settings explicitly in the dashboard:
 
 | Setting | API service | Web service |
 | --- | --- | --- |
 | Root Directory | repository root `/` | repository root `/` |
-| Config File | `/server/railway.json` | `/web/railway.json` |
-| Dockerfile (set by config) | `server/Dockerfile` | `web/Dockerfile` |
-| Health check (set by config) | `/api/v1/health` | `/health` |
+| Variable `RAILWAY_DOCKERFILE_PATH` | `server/Dockerfile` | `web/Dockerfile` |
+| Custom Build Command | empty | empty |
+| Custom Start Command | empty | empty |
+| Health check path | `/api/v1/health` | `/health` |
+| Health check timeout | 120 seconds | 120 seconds |
 | Replicas | **1** | 1 initially |
+| Restart policy | On Failure, 5 retries | On Failure, 5 retries |
 
-**Do not set Root Directory to `/web` or `/server`.** The frontend needs root assets and shared packages. The config-file paths select different builds while preserving that context. Leave the custom build/start commands empty; Dockerfiles supply them. Each service has its own watch patterns and deploys independently. The extension gets no service.
+**Do not set Root Directory to `/web` or `/server`.** The frontend needs root assets and shared packages. Add `RAILWAY_DOCKERFILE_PATH` in each service's Variables tab, clear any auto-imported `pnpm --filter ...` build/start commands, and apply/deploy the changes. Railway should now select Dockerfile builds instead of Railpack. The Dockerfiles supply their own build steps and startup commands; do not add a Node `start` script to fix an API detection error.
 
-Keep the API at one replica in one region, with one worker, and disable Railway Serverless/app sleeping. Socket fan-out and rate limiting are process-local. PostgreSQL transactions lock room rows, but multiple API processes do not share live broadcasts. The API configuration requests zero deployment overlap and a 15-second drain; clients reconnect after replacement. Database initialization creates missing tables automatically; existing room rows are preserved.
+The checked-in `server/railway.json` and `web/railway.json` files describe the legacy Config as Code setup. Railway's current documentation says new services cannot opt into those files, and existing users must migrate before its 2026-12-01 cutoff. For new services, use the explicit dashboard settings and Dockerfile variables above. See [Railway's configuration notice](https://docs.railway.com/config-as-code) and [custom Dockerfile instructions](https://docs.railway.com/builds/dockerfiles).
+
+Set watch paths separately if desired: API `server/**`; web `web/**`, `packages/**`, `extension/package.json`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, and `*.png`. The services deploy independently. The extension gets no service.
+
+Keep the API at one replica in one region, with one worker, and disable Railway Serverless/app sleeping. Socket fan-out and rate limiting are process-local. PostgreSQL transactions lock room rows, but multiple API processes do not share live broadcasts. Set API variables `RAILWAY_DEPLOYMENT_OVERLAP_SECONDS=0` and `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=15`; clients reconnect after replacement. Database initialization creates missing tables automatically; existing room rows are preserved.
 
 ## 3. Allocate public domains and configure variables
 
@@ -41,6 +50,9 @@ If Railway needs a first deployment before it can generate domains, deploy **web
 ### API service variables
 
 ```dotenv
+RAILWAY_DOCKERFILE_PATH=server/Dockerfile
+RAILWAY_DEPLOYMENT_OVERLAP_SECONDS=0
+RAILWAY_DEPLOYMENT_DRAINING_SECONDS=15
 APP_ENV=production
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 APP_BASE_URL=https://YOUR-WEB-DOMAIN
@@ -68,6 +80,7 @@ Leave Railway's supplied `PORT` in place. The API starts through `python -m app.
 ### Web service variables
 
 ```dotenv
+RAILWAY_DOCKERFILE_PATH=web/Dockerfile
 VITE_API_BASE_URL=https://YOUR-API-DOMAIN
 VITE_WS_BASE_URL=wss://YOUR-API-DOMAIN
 ```
@@ -91,6 +104,18 @@ curl --fail https://YOUR-WEB-DOMAIN/health
 All should return a successful JSON response. `/health` on the API is another readiness alias. Readiness returns HTTP 503 without database details when the database is unavailable; liveness does not query the database.
 
 Open the web URL, host a table using your creation secret, and save its recovery token. Join in two separate browser profiles. Check that each player sees only their own dice before showdown, complete a hand, inspect the ledger, and refresh both clients. Then restart/redeploy **only the API** and confirm reconnection preserves dice, balances, and turn state. In browser developer tools, the room socket should use `wss://YOUR-API-DOMAIN/...` and authenticate in its first message, with no credential in the URL. Test a player cheat notification and a GM NPC turn as well. Automated local tests cover role redaction and durable command retries; live Railway networking still needs this acceptance check.
+
+If an API build says `Railpack`, `Detected Node`, or `No start command detected`, Railway has not selected the Python Dockerfile. Check the service's `RAILWAY_DOCKERFILE_PATH=server/Dockerfile`, root `/`, and cleared custom commands, then start a new deployment. A root Node start script is not needed.
+
+If the website shows `Blocked request. This host ... is not allowed` and mentions Vite `server.allowedHosts`, the web service is running a development server. Set web variable `RAILWAY_DOCKERFILE_PATH=web/Dockerfile`, keep root `/`, clear custom build/start commands (especially `pnpm dev` or `vite`), and rebuild/deploy. The production image serves built files with Nginx; no Vite allowed-host change is needed. Check that the public-domain target port matches Nginx’s listening port (`PORT`, default 8080). Verify the new deployment at `/health`, which must return JSON `{"status":"ok"}`.
+
+If startup logs still show `@fivebones/web ... dev`, `vite --host 0.0.0.0`, or port 5173, the active deployment is still the Node/Vite image. Check that the Dockerfile variable was added to **web**, then use the project’s staged-changes review/deploy action to apply the edited settings. Restarting an old deployment does not change its image, and selecting Redeploy on a historical deployment reuses its original configuration. Check the newest build for its Nginx final stage and wait for that deployment to become active. For an explicit port setup, set web `PORT=8080` and its public-domain target port to 8080. See [Railway staged changes](https://docs.railway.com/deployments/staged-changes) and [deployment actions](https://docs.railway.com/deployments/deployment-actions).
+
+If the web Docker build succeeds through `COPY --from=build /app/web/dist` but startup reports `pnpm` not found, a stale service start override is still trying to launch Node tooling in the final Nginx image. In web Settings → Deploy → Custom Start Command, explicitly replace it with `/docker-entrypoint.sh nginx -g 'daemon off;'` and apply the staged changes as a new deployment. This runs Nginx’s official entrypoint so its configuration template is expanded with `PORT` before the server starts. Keep web `PORT=8080` and the public target port at 8080. pnpm is needed only in the build stage, which has already completed. Once the stale override is resolved, the image’s default startup also works.
+
+If hosting/joining shows `TypeError: Failed to fetch` or `Fetch Failed`, inspect the browser request URL or the deployed JavaScript bundle. `VITE_API_BASE_URL` and `VITE_WS_BASE_URL` must use the API’s generated public `*.up.railway.app` domain. A compiled value such as `https://fivebonescontracts.railway.internal` cannot be reached by a player’s browser: private Railway hostnames are for service-to-service traffic. Replace both web variables with the public HTTPS/WSS API origin, apply the edited variables in a fresh web build, and reload the page. A restart of the existing Nginx image cannot change compiled values. Then verify the API public health endpoint and allow the exact website origin in API `ALLOWED_ORIGINS` and `WS_ALLOWED_ORIGINS`.
+
+If the compiled frontend points to the correct public API but `/api/v1/health` and the browser preflight both return Railway HTTP 502 `Application failed to respond`, check API startup and port routing before changing CORS. Set API `PORT=8000` and its public-domain target port to 8000 for an explicit matching pair. The startup log must show Uvicorn listening on `0.0.0.0:8000`; inspect any traceback if it does not. The backend invitation variable is exactly `APP_BASE_URL`, not `API_BASE_URL`. Missing production configuration can prevent startup even when the Docker build succeeded.
 
 A healthy API with a disconnected browser usually means a wrong compiled web endpoint or an omitted exact origin. Inspect the browser Network/WebSocket view and API logs, correct the service variables, and redeploy the affected service. A startup failure in production is often a missing secret, database reference, or HTTPS origin. Never loosen origin validation to `*`.
 

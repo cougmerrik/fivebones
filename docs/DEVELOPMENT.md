@@ -4,8 +4,8 @@ Run all commands from the repository root. Production deployment is documented i
 
 ## Layout
 
-- `web/`: React/Vite entry point, static-server Dockerfile, Railway config, public environment example.
-- `server/`: FastAPI, pure rules engine, PostgreSQL/SQLite persistence, tests, Dockerfile and Railway config.
+- `web/`: React/Vite entry point, static-server Dockerfile, legacy Railway config, public environment example.
+- `server/`: FastAPI, pure rules engine, PostgreSQL/SQLite persistence, tests, Dockerfile and legacy Railway config.
 - `extension/`: MV3 wrapper around the shared interface, build script, ZIP packaging and public environment example.
 - `packages/ui/`, `packages/contracts/`: shared interface and protocol validation.
 - `docs/`: development and implementation notes. Specifications remain under `spec/` and `contracts/`.

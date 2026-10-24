@@ -10,10 +10,11 @@ Five Bones uses fictional campaign gold. Dice, turns, private actions, and the l
 - Five dice, two fixed-limit betting rounds, one reroll opportunity, showdown, and the Widowmaker rule.
 - A compact phase tracker, centered dice, orientation-specific backgrounds, and the supplied title and dice artwork.
 - Private Dexterity-based cheating: Loaded die, Change die, or a written action for DM adjudication. NPCs use the same checks; the DM has audited dice corrections.
-- Live gold/net summaries, a transaction ledger, settlement text, and GM CSV export.
+- Next-hand opt-in/out, GM removal/restoration, reusable NPC presets, and a public last-turn recap.
+- Live gold/net summaries, a final session summary in the game area, settlement text, and GM CSV export.
 - An in-app **Hands & rules** reference and an optional movable, resizable Roll20 overlay.
 
-See [gameplay and campaign conventions](docs/GAMEPLAY.md) for betting defaults, tie handling, cheating details, and the table layout.
+See [gameplay and campaign conventions](docs/GAMEPLAY.md) for participation controls, NPC preset/queued-roll instructions, betting defaults, tie handling, cheating details, and the table layout.
 
 ## Start locally
 
@@ -77,12 +78,12 @@ Follow **[RAILWAY_DEPLOY.md](RAILWAY_DEPLOY.md)** for the complete deployment se
 
 The deployment uses one GitHub repository and two independently deployable Railway services, plus PostgreSQL:
 
-| Service | Root Directory | Config File |
+| Service | Root Directory | `RAILWAY_DOCKERFILE_PATH` variable |
 | --- | --- | --- |
-| API | `/` | `/server/railway.json` |
-| Web | `/` | `/web/railway.json` |
+| API | `/` | `server/Dockerfile` |
+| Web | `/` | `web/Dockerfile` |
 
-Both builds need the repository root as their context. Production requires PostgreSQL through `DATABASE_URL`, an HTTPS website/API, secure WSS, exact allowed origins, and a private host-creation secret. Frontend `VITE_API_BASE_URL` and `VITE_WS_BASE_URL` are public build-time values: changing them requires a rebuild. Keep one API replica and worker because live socket broadcasting is process-local.
+Set each Dockerfile variable in Railway’s Variables tab and clear auto-generated custom build/start commands. Configure health checks in the dashboard; new services cannot opt into the legacy `railway.json` files. Both builds need the repository root as their context. Production requires PostgreSQL through `DATABASE_URL`, an HTTPS website/API, secure WSS, exact allowed origins, and a private host-creation secret. Frontend `VITE_API_BASE_URL` and `VITE_WS_BASE_URL` are public build-time values: changing them requires a rebuild. Keep one API replica and worker because live socket broadcasting is process-local.
 
 The API binds to `0.0.0.0` and the supplied `PORT`. `/api/v1/health` and `/health` check database readiness; `/live` checks liveness. The web service has its own `/health` endpoint. The extension is distributed separately, never as a Railway service.
 
@@ -115,7 +116,7 @@ pnpm test
 
 Set `TEST_DATABASE_URL` to a dedicated PostgreSQL test database to run session checks against both databases. Browser tests use isolated ports and a temporary database. `pnpm build:web` produces only the website; `pnpm build:extension` produces only the extension and ZIP.
 
-GitHub Actions runs rules/session tests, TypeScript and endpoint checks, production bundles, Docker health/restart checks, and Chromium acceptance. See [development instructions](docs/DEVELOPMENT.md) for exact test setup and [observed results](tests/RESULTS.md) for actual outcomes. Final local Docker runtime verification and the newest migration-test rerun remain incomplete after network and permission-review timeouts; live Railway, Roll20, and Edge acceptance remain manual.
+GitHub Actions runs rules/session tests, TypeScript and endpoint checks, production bundles, Docker health/restart checks, and Chromium acceptance. See [development instructions](docs/DEVELOPMENT.md) for exact test setup and [observed results](tests/RESULTS.md) for actual outcomes. The latest server run passes against SQLite and PostgreSQL, including migration and the live-table controls. Earlier Docker runtime verification was limited by network and permission-review timeouts; live Railway and browser-extension acceptance for each new build remain manual.
 
 ## Repository map
 

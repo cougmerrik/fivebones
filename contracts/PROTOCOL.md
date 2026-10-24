@@ -72,3 +72,13 @@ Snapshots add role-scoped `cheatRequests` and `diceChanges`; opponent/spectator 
 - `setAbilities {dexterity}` may only initialize a missing human score. Existing values cannot be replaced, including in LOBBY or READY_NEXT_HAND.
 
 All new NPC actions retain optimistic version checks and durable, per-credential command receipts. Repeating the same NPC cheat command ID returns its original acknowledgement without rerolling the check or loaded die.
+
+## Live table controls
+
+- `setParticipation {participating:boolean}`: seated humans change their own persistent next-hand preference. GM may supply `seatId` for any nonremoved human/NPC. Players cannot supply another seat ID; spectators cannot participate. No active hand is changed.
+- `removeSeat {seatId,confirmed:true}`: GM-only; folds a live target during betting/rerolls, retains all wagers/history, excludes it until restored. Does not delete credentials. Rejects during ADJUDICATION.
+- `restoreSeat {seatId}`: GM-only; restores eligibility for future hands, never returns to the current hand.
+
+Snapshots include public seat `nextHand` and `removed` flags; old rooms default to true/false. `lastTurn` is a server-authored public recap that survives reconnect/restart. Private actions do not update this field. Existing receipt/version semantics apply to all controls.
+
+NPC presets are browser/extension-local configuration templates with name, opening gold, and Dexterity. They contain no tokens, live balances, hidden dice, or scripts; seating a template still uses the GM-authorized server command. Web uses localStorage; the extension uses isolated chrome.storage.local.

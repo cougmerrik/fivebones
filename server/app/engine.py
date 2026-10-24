@@ -39,7 +39,7 @@ def add_seat(r, name, balance, npc=False):
     require(type(balance) is int and 0 <= balance <= 1000000000, 'INVALID_BALANCE')
     sid = str(len(r['seats']) + 1)
     r['seats'].append(dict(id=sid, name=name, npc=npc, opening=balance, balance=balance, queue=[],
-                           dice=[], folded=True, contribution=0, commitment=0, rerollCount=None))
+                           dice=[], folded=True, contribution=0, commitment=0, rerollCount=None, nextHand=True, removed=False))
     return sid
 
 def seat(r, sid):
@@ -212,10 +212,43 @@ def apply_cheat(r, action, data, gm, sid, randbelow, npc=False):
     r.setdefault('audit', []).append(dict(kind='gmCheatResolved', hand=r['hand'], request=deepcopy(q)))
     return r
 
-def apply(original, action, data, gm=False, sid=None, die=None, randbelow=None):
+def _apply(original, action, data, gm=False, sid=None, die=None, randbelow=None):
     """Returns a new aggregate, leaving original untouched on any rejection."""
     r=deepcopy(original)
     require(not r['ended'], 'SESSION_ENDED')
+    if action == 'setParticipation':
+        require(sid is not None or gm, 'UNAUTHORIZED')
+        target = data.get('seatId') if gm else sid
+        require(gm or 'seatId' not in data, 'UNAUTHORIZED')
+        s = next((x for x in r['seats'] if x['id'] == target), None)
+        require(s is not None, 'SEAT_NOT_FOUND')
+        require(gm or not s['npc'], 'UNAUTHORIZED')
+        require(not s.get('removed', False), 'SEAT_REMOVED')
+        require(type(data.get('participating')) is bool, 'INVALID_PARTICIPATION')
+        s['nextHand'] = data['participating']
+        event(r, 'participationChanged', seatId=target, participating=s['nextHand'])
+        return r
+    if action in ('removeSeat', 'restoreSeat'):
+        require(gm, 'UNAUTHORIZED')
+        s = next((x for x in r['seats'] if x['id'] == data.get('seatId')), None)
+        require(s is not None, 'SEAT_NOT_FOUND')
+        if action == 'restoreSeat':
+            require(s.get('removed', False), 'SEAT_NOT_REMOVED')
+            s.update(removed=False, nextHand=True)
+            event(r, 'seatRestored', seatId=s['id'])
+            return r
+        require(data.get('confirmed') is True, 'CONFIRMATION_REQUIRED')
+        require(r['phase'] != 'ADJUDICATION', 'ADJUDICATION_REQUIRED')
+        require(not s.get('removed', False), 'SEAT_REMOVED')
+        s.update(removed=True, nextHand=False)
+        event(r, 'seatRemoved', seatId=s['id'])
+        r['audit'].append(dict(kind='gmSeatRemoved', hand=r['hand'], seatId=s['id']))
+        if r['phase'] in CHEAT_PHASES and not s['folded']:
+            s['folded'] = True
+            r['pending'] = [x for x in r['pending'] if x != s['id']]
+            advance(r)
+            expire_cheats(r)
+        return r
     if action == 'requestNPCCheat':
         require(gm, 'UNAUTHORIZED')
         require(r['actor'] is not None and seat(r, r['actor'])['npc'], 'NOT_NPC_TURN')
@@ -232,12 +265,12 @@ def apply(original, action, data, gm=False, sid=None, die=None, randbelow=None):
         require(gm,'UNAUTHORIZED'); s=seat(r,data['seatId']); require(s['npc'],'UNAUTHORIZED')
         queue=data['queue']; require(type(queue) is list and len(queue)<=10,'INVALID_QUEUE')
         for item in queue:
-            require(set(item)<= {'initial','replacements'},'INVALID_QUEUE'); rank(item['initial'])
-            require(len(item.get('replacements',[]))<=5 and all(type(v) is int and 1<=v<=6 for v in item.get('replacements',[])),'INVALID_QUEUE')
+            require(type(item) is dict and 'initial' in item and set(item)<= {'initial','replacements'} and type(item['initial']) is list,'INVALID_QUEUE'); rank(item['initial'])
+            require(type(item.get('replacements',[])) is list and len(item.get('replacements',[]))<=5 and all(type(v) is int and 1<=v<=6 for v in item.get('replacements',[])),'INVALID_QUEUE')
         s['queue']=queue; r['audit'].append(dict(hand=r['hand'],seatId=s['id'],kind='npcScriptAuthorized',queue=deepcopy(queue))); event(r,'npcScriptAuthorized',seatId=s['id']); return r
     if action=='startHand':
         require(gm,'UNAUTHORIZED'); require(r['phase'] in ('LOBBY','READY_NEXT_HAND'),'WRONG_PHASE')
-        entrants=[s for s in r['seats'] if s['balance']>=r['ante'] and s['balance']>0]
+        entrants=[s for s in r['seats'] if s.get('nextHand', True) and not s.get('removed', False) and s['balance']>=r['ante'] and s['balance']>0]
         require(len(entrants)>=2,'INSUFFICIENT_SEATS')
         r['hand']+=1; r['dealer']=(r['dealer']+1)%len(r['seats']); r['revealed']=[]
         for s in r['seats']:
@@ -287,10 +320,46 @@ def apply(original, action, data, gm=False, sid=None, die=None, randbelow=None):
     r['pending']=[x for x in r['pending'] if x!=sid and not seat(r,x)['folded']]
     advance(r); expire_cheats(r); return r
 
+def apply(original, action, data, gm=False, sid=None, die=None, randbelow=None):
+    result = _apply(original, action, data, gm, sid, die, randbelow)
+    # Only public actions update this recap. Private cheats and scripts never do.
+    ordinary = data.get('action') if action == 'takeNPCAction' else action
+    actor_id = original.get('actor') if gm else sid
+    if action == 'forceFold': actor_id = original.get('actor')
+    if action == 'removeSeat': actor_id = data.get('seatId')
+    actor = next((s for s in result['seats'] if s['id'] == actor_id), None)
+    text = None
+    if ordinary in ('check', 'call', 'bet', 'raise', 'fold', 'setReroll') or action == 'forceFold':
+        name = actor['name']
+        paid = -sum(x['amountCp'] for x in result['ledger'][len(original['ledger']):]
+                    if x['seatId'] == actor_id and x['kind'] == 'wager')
+        if action == 'forceFold': text = f"The GM folded {name}."
+        elif ordinary == 'setReroll':
+            count = seat(result, actor_id)['rerollCount']
+            text = f"{name} stood pat." if count == 0 else f"{name} rerolled {count} dice."
+        elif ordinary == 'check': text = f"{name} checked."
+        elif ordinary == 'fold': text = f"{name} folded."
+        elif ordinary == 'raise': text = f"{name} raised, paying {paid / 100:.2f} gp."
+        else: text = f"{name} {'called' if ordinary == 'call' else 'bet'} {paid / 100:.2f} gp."
+    elif action == 'removeSeat': text = f"The GM removed {actor['name']} from play."
+    elif action == 'startHand': text = f"Hand {result['hand']} began. Antes were collected and private dice rolled."
+    elif action == 'endSession': text = f"The GM finished the session after {result['hand']} hands."
+    elif action == 'adjudicate': text = 'The GM refunded the hand after adjudicating the Widowmakers.'
+    if text and result['phase'] != original['phase']:
+        if result['phase'] == 'READY_NEXT_HAND':
+            settlement = next(x for x in reversed(result['events']) if x['name'] == 'settlement')
+            text += ' Contributions were refunded.' if settlement['refund'] else ' Hand complete; winner' + ('s: ' if len(settlement['winners']) > 1 else ': ') + ', '.join(seat(result, x)['name'] for x in settlement['winners']) + '.'
+        elif result['phase'] == 'REROLL': text += ' Rerolls begin.'
+        elif result['phase'] == 'BETTING_2': text += ' Betting 2 begins.'
+        elif result['phase'] == 'ADJUDICATION': text += ' All remaining hands are Widowmakers; GM adjudication is required.'
+    if text: result['lastTurn'] = text
+    return result
+
 def view(r, sid=None, gm=False):
     seats=[]
     for s in r['seats']:
         public={k:s[k] for k in ('id','name','npc','opening','balance','folded','contribution','commitment','rerollCount')}
+        public.update(nextHand=s.get('nextHand', True), removed=s.get('removed', False))
         if s['id']==sid or s['id'] in r['revealed'] or (gm and s['npc']): public['dice']=s['dice']
         if s['id'] in r['revealed']: public['handRank']={-1:'Widowmaker',0:'High bones',1:'One pair',2:'Two pair',3:'Three of a kind',4:'Straight',5:'Full house',6:'Four of a kind',7:'Five of a kind'}[rank(s['dice'])[0]]
         if gm and s['npc']: public['queue']=s['queue']
@@ -303,5 +372,6 @@ def view(r, sid=None, gm=False):
     result['cheatRequests']=[deepcopy(q) for q in r.get('cheatRequests',[]) if gm or q['seatId']==sid]
     result['diceChanges']=[deepcopy(c) for c in r.get('diceChanges',[]) if gm or c['seatId']==sid]
     if gm: result['audit']=r.get('audit',[])
+    result['lastTurn']=r.get('lastTurn', 'No turn has been taken yet.')
     result['target']=r.get('target',0); result['raises']=r.get('raises',0)
     return result
