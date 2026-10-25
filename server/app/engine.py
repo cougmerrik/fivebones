@@ -265,8 +265,12 @@ def _apply(original, action, data, gm=False, sid=None, die=None, randbelow=None)
         require(gm,'UNAUTHORIZED'); s=seat(r,data['seatId']); require(s['npc'],'UNAUTHORIZED')
         queue=data['queue']; require(type(queue) is list and len(queue)<=10,'INVALID_QUEUE')
         for item in queue:
-            require(type(item) is dict and 'initial' in item and set(item)<= {'initial','replacements'} and type(item['initial']) is list,'INVALID_QUEUE'); rank(item['initial'])
+            require(type(item) is dict and 'initial' in item and set(item)<= {'initial','replacements','rerollIndexes'} and type(item['initial']) is list,'INVALID_QUEUE'); rank(item['initial'])
             require(type(item.get('replacements',[])) is list and len(item.get('replacements',[]))<=5 and all(type(v) is int and 1<=v<=6 for v in item.get('replacements',[])),'INVALID_QUEUE')
+            if 'rerollIndexes' in item:
+                indexes = item['rerollIndexes']
+                require(type(indexes) is list and len(indexes)<=5 and all(type(i) is int and 0<=i<5 for i in indexes) and len(set(indexes))==len(indexes), 'INVALID_QUEUE')
+                require(len(item.get('replacements', [])) == len(indexes), 'INVALID_QUEUE')
         s['queue']=queue; r['audit'].append(dict(hand=r['hand'],seatId=s['id'],kind='npcScriptAuthorized',queue=deepcopy(queue))); event(r,'npcScriptAuthorized',seatId=s['id']); return r
     if action=='startHand':
         require(gm,'UNAUTHORIZED'); require(r['phase'] in ('LOBBY','READY_NEXT_HAND'),'WRONG_PHASE')
@@ -274,12 +278,13 @@ def _apply(original, action, data, gm=False, sid=None, die=None, randbelow=None)
         require(len(entrants)>=2,'INSUFFICIENT_SEATS')
         r['hand']+=1; r['dealer']=(r['dealer']+1)%len(r['seats']); r['revealed']=[]
         for s in r['seats']:
-            s.update(loadedIndexes=[], folded=s not in entrants, contribution=0, commitment=0, rerollCount=None, dice=[], replacements=[])
+            s.update(loadedIndexes=[], folded=s not in entrants, contribution=0, commitment=0, rerollCount=None, dice=[], replacements=[], autoRerollIndexes=None)
             if not s['folded']:
                 pay(r,s,r['ante'])
                 script=s['queue'].pop(0) if s['npc'] and s['queue'] else None
                 s['dice']=script['initial'][:] if script else [die() for _ in range(5)]
                 s['replacements']=script.get('replacements',[])[:] if script else []
+                s['autoRerollIndexes']=script['rerollIndexes'][:] if script and 'rerollIndexes' in script else None
         betting(r,'BETTING_1'); expire_cheats(r); event(r,'handStarted'); return r
     if action=='adjudicate':
         require(gm,'UNAUTHORIZED'); require(r['phase']=='ADJUDICATION','WRONG_PHASE')
@@ -301,7 +306,16 @@ def _apply(original, action, data, gm=False, sid=None, die=None, randbelow=None)
     elif r['phase']=='REROLL':
         require(action=='setReroll' and s['rerollCount'] is None,'INVALID_REROLL')
         indexes=data.get('indexes'); require(isinstance(indexes,list) and len(indexes)<=5 and all(type(i) is int and 0<=i<5 for i in indexes) and len(set(indexes))==len(indexes),'INVALID_REROLL')
-        for i in indexes: s['dice'][i]=loaded_face(randbelow) if i in s.get('loadedIndexes',[]) else s['replacements'].pop(0) if s['replacements'] else die()
+        planned = s.get('autoRerollIndexes')
+        if planned is not None:
+            require(s['npc'] and indexes == planned, 'SCRIPTED_REROLL_REQUIRED')
+            # Consume one replacement per selected slot, even if loaded odds override its face.
+            for i, face in zip(indexes, s['replacements']):
+                s['dice'][i] = loaded_face(randbelow) if i in s.get('loadedIndexes',[]) else face
+            s['replacements'] = []
+            s['autoRerollIndexes'] = None
+        else:
+            for i in indexes: s['dice'][i]=loaded_face(randbelow) if i in s.get('loadedIndexes',[]) else s['replacements'].pop(0) if s['replacements'] else die()
         s['rerollCount']=len(indexes); event(r,'rerollCount',seatId=sid,count=len(indexes))
     else:
         due=r['target']-s['commitment']; increment=r['small']*(2 if r['phase']=='BETTING_2' else 1)
@@ -353,6 +367,22 @@ def apply(original, action, data, gm=False, sid=None, die=None, randbelow=None):
         elif result['phase'] == 'BETTING_2': text += ' Betting 2 begins.'
         elif result['phase'] == 'ADJUDICATION': text += ' All remaining hands are Widowmakers; GM adjudication is required.'
     if text: result['lastTurn'] = text
+    # Complete only explicitly authorized scripted NPC rerolls. This loop is part of
+    # the triggering command's transaction/version/receipt, never a client timer.
+    while result['phase'] == 'REROLL' and result['actor'] is not None:
+        npc = seat(result, result['actor'])
+        indexes = npc.get('autoRerollIndexes')
+        if not npc['npc'] or indexes is None or npc['folded']:
+            break
+        npc_id, npc_name = npc['id'], npc['name']
+        before, planned_faces = npc['dice'][:], npc['replacements'][:]
+        result = _apply(result, 'takeNPCAction', {'action':'setReroll', 'data':{'indexes':indexes[:]}}, gm=True, die=die, randbelow=randbelow)
+        after = seat(result, npc_id)['dice'][:]
+        result['audit'].append(dict(kind='npcAutoReroll', hand=result['hand'], seatId=npc_id,
+                                    indexes=indexes[:], replacements=planned_faces, before=before, after=after))
+        recap = f"{npc_name} stood pat." if not indexes else f"{npc_name} rerolled {len(indexes)} dice."
+        if result['phase'] == 'BETTING_2': recap += ' Betting 2 begins.'
+        result['lastTurn'] = (result.get('lastTurn', '') + ' ' + recap).strip()
     return result
 
 def view(r, sid=None, gm=False):
@@ -362,7 +392,9 @@ def view(r, sid=None, gm=False):
         public.update(nextHand=s.get('nextHand', True), removed=s.get('removed', False))
         if s['id']==sid or s['id'] in r['revealed'] or (gm and s['npc']): public['dice']=s['dice']
         if s['id'] in r['revealed']: public['handRank']={-1:'Widowmaker',0:'High bones',1:'One pair',2:'Two pair',3:'Three of a kind',4:'Straight',5:'Full house',6:'Four of a kind',7:'Five of a kind'}[rank(s['dice'])[0]]
-        if gm and s['npc']: public['queue']=s['queue']
+        if gm and s['npc']:
+            public['queue']=s['queue']
+            public['autoReroll']=dict(indexes=s['autoRerollIndexes'][:], replacements=s['replacements'][:]) if s.get('autoRerollIndexes') is not None and not s['folded'] and r['phase'] in ('BETTING_1','REROLL') else None
         if s['id']==sid or gm:
             public['abilities']=s.get('abilities')
             public['loadedIndexes']=s.get('loadedIndexes',[])

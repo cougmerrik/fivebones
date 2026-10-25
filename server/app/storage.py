@@ -13,6 +13,12 @@ rooms = Table('rooms', metadata,
     Column('invite', Text, nullable=False),
     Column('created', Float(precision=53), nullable=False),
 )
+campaigns = Table('campaigns', metadata,
+    Column('alias', Text, primary_key=True),
+    Column('room_id', Text, nullable=True),
+    Column('credentials', Text, nullable=False),
+    Column('receipts', Text, nullable=False),
+)
 _engines = {}
 _lock = Lock()
 

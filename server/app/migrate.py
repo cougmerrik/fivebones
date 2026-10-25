@@ -18,11 +18,15 @@ def main():
     source=Path(args.source_sqlite).resolve()
     with sqlite3.connect(source.as_uri()+'?mode=ro',uri=True) as old:
         records=old.execute('SELECT id,state,credentials,invite,created FROM rooms').fetchall()
+        has_campaigns=old.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='campaigns'").fetchone()
+        campaigns=old.execute('SELECT alias,room_id,credentials,receipts FROM campaigns').fetchall() if has_campaigns else []
     with storage.transaction(url) as new:
         for record in records:
             # A collision aborts the entire transaction; existing rooms are never replaced.
             new.execute('INSERT INTO rooms (id,state,credentials,invite,created) VALUES (?,?,?,?,?)',record)
-    print(f'Migrated {len(records)} rooms; original tokens remain valid. No source rows were modified.')
+        for record in campaigns:
+            new.execute('INSERT INTO campaigns (alias,room_id,credentials,receipts) VALUES (?,?,?,?)',record)
+    print(f'Migrated {len(records)} rooms and {len(campaigns)} campaign mappings; original tokens remain valid. No source rows were modified.')
 
 
 if __name__=='__main__':main()

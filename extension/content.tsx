@@ -1,6 +1,7 @@
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {FiveBonesApp} from '../packages/ui/App';
+import {CampaignApp} from '../packages/ui/CampaignApp';
 import css from '../packages/ui/style.css';
 declare const FIVE_BONES_API:string;
 declare const FIVE_BONES_WS:string;
@@ -13,7 +14,12 @@ if(window===window.top&&!document.getElementById('five-bones-overlay')){
  const panel=document.createElement('section');panel.className='window';panel.hidden=true;panel.setAttribute('aria-label','Five Bones game overlay');root.append(panel);
  const bar=document.createElement('div');bar.className='bar';const drag=document.createElement('button');drag.className='handle';drag.textContent='Five Bones · drag / arrow keys to move';bar.append(drag);
  const minimize=document.createElement('button');minimize.textContent='Minimize';bar.append(minimize);const close=document.createElement('button');close.textContent='Close';bar.append(close);panel.append(bar);
- const mount=document.createElement('div');panel.append(mount);chrome.storage.local.get('session:'+FIVE_BONES_API,(data:any)=>{createRoot(mount).render(<FiveBonesApp assetUrl={path=>chrome.runtime.getURL(path)} api={FIVE_BONES_API} wsApi={FIVE_BONES_WS} npcPresetStore={{load:()=>new Promise((resolve,reject)=>chrome.storage.local.get('npc-presets:'+FIVE_BONES_API,(data:any)=>chrome.runtime.lastError?reject(Error(chrome.runtime.lastError.message)):resolve(data['npc-presets:'+FIVE_BONES_API]||[]))),save:presets=>new Promise<void>((resolve,reject)=>chrome.storage.local.set({['npc-presets:'+FIVE_BONES_API]:presets},()=>chrome.runtime.lastError?reject(Error(chrome.runtime.lastError.message)):resolve()))}} isolatedSession={data['session:'+FIVE_BONES_API]||null} onSession={session=>chrome.storage.local.set({['session:'+FIVE_BONES_API]:session})}/>)});
+ const params=new URLSearchParams(location.search);
+ const manual=params.get('manual')==='1'||params.has('invite');
+ const App=manual?FiveBonesApp:CampaignApp;
+ if(!manual&&(params.get('room')==='belwether'||params.get('isdm')==='1'))panel.hidden=false;
+ const campaignStore={load:(key:string)=>new Promise((resolve,reject)=>chrome.storage.local.get('campaign:'+FIVE_BONES_API+':belwether:'+key,(data:any)=>chrome.runtime.lastError?reject(Error(chrome.runtime.lastError.message)):resolve(data['campaign:'+FIVE_BONES_API+':belwether:'+key]??null))),save:(key:string,value:unknown)=>new Promise<void>((resolve,reject)=>chrome.storage.local.set({['campaign:'+FIVE_BONES_API+':belwether:'+key]:value},()=>chrome.runtime.lastError?reject(Error(chrome.runtime.lastError.message)):resolve()))};
+ const mount=document.createElement('div');panel.append(mount);chrome.storage.local.get('session:'+FIVE_BONES_API,(data:any)=>{createRoot(mount).render(<App {...(!manual?{credentialStore:campaignStore,dmMode:params.has('isdm')?params.get('isdm')==='1':undefined}:{})} assetUrl={path=>chrome.runtime.getURL(path)} api={FIVE_BONES_API} wsApi={FIVE_BONES_WS} npcPresetStore={{load:()=>new Promise((resolve,reject)=>chrome.storage.local.get('npc-presets:'+FIVE_BONES_API,(data:any)=>chrome.runtime.lastError?reject(Error(chrome.runtime.lastError.message)):resolve(data['npc-presets:'+FIVE_BONES_API]||[]))),save:presets=>new Promise<void>((resolve,reject)=>chrome.storage.local.set({['npc-presets:'+FIVE_BONES_API]:presets},()=>chrome.runtime.lastError?reject(Error(chrome.runtime.lastError.message)):resolve()))}} isolatedSession={data['session:'+FIVE_BONES_API]||null} onSession={session=>chrome.storage.local.set({['session:'+FIVE_BONES_API]:session})}/>)});
  const save=()=>chrome.storage.local.set({layout:{left:panel.offsetLeft,top:panel.offsetTop,width:panel.offsetWidth,height:panel.offsetHeight}});
  chrome.storage.local.get('layout',(data:any)=>{const l=data.layout;if(l){panel.style.left=Math.max(0,Math.min(l.left,innerWidth-100))+'px';panel.style.top=Math.max(0,Math.min(l.top,innerHeight-60))+'px';panel.style.width=l.width+'px';panel.style.height=l.height+'px';panel.style.right='auto'}});
  launcher.onclick=()=>{panel.hidden=false;drag.focus()};minimize.onclick=close.onclick=()=>{panel.hidden=true;launcher.focus();save()};

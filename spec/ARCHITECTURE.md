@@ -58,3 +58,6 @@ Exact schema is flexible, but must support reconnect, replay, audit and accounti
 ## Implemented persistence / production topology
 
 The implementation stores a room aggregate and hashed credentials in a transactional rooms table, rather than separate tables for each conceptual entity above. PostgreSQL via DATABASE_URL is required for production; SQLite remains available locally. Room writes use PostgreSQL row locks or SQLite immediate transactions, including durable per-credential command receipts. Deploy one API replica/worker because live socket fan-out is process-local. Web and API have independent Dockerfiles/Railway configs; both use the repository root build context. See [RAILWAY_DEPLOY.md](../RAILWAY_DEPLOY.md).
+
+
+The optional permanent Belwether campaign entrypoint stores a transactional alias/current-room mapping, hashed DM credentials and start receipts in a separate campaigns table. Player joins use private retry keys to recover the same seat, and campaign DM authority remains server-verified. Ordinary rooms, private projections and ledger state machines are unchanged; previous sessions are retained. See contracts/PROTOCOL.md for endpoints.

@@ -154,3 +154,34 @@ Actual verification:
 - Production website and extension builds with the live public HTTPS/WSS API endpoints passed. Extension ZIP integrity, feature strings, endpoint and storage-only permissions verified. Final rebuilt outputs are ignored build artifacts, not committed source.
 
 No live room was modified, and no Railway deployment or GitHub push was performed. Deploy API and web before reloading the updated extension. Presets are local to each browser/extension installation rather than synchronized between devices; live game state and all balances remain server-authoritative. Live Roll20/Edge acceptance of this feature update remains manual.
+
+## Automatic queued NPC rerolls (2026-10-24)
+
+- Added optional `rerollIndexes` to GM-authorized queue entries, with unique zero-based slots and exactly one replacement face per selected slot. Empty arrays explicitly stand pat. Legacy entries without selections keep manual behavior rather than guessing slots.
+- Each participating NPC saves its current-hand plan. After accepted commands, the server executes consecutive due planned NPC rerolls through the existing one-shot rules engine, stopping at a human/manual turn or Betting 2. The entire chain shares the triggering command's transaction, version and durable receipt. No betting automation or client timers were added.
+- GM snapshots show pending plans privately; completed executions have private before/after/selection audits. Public snapshots/logs/recaps expose only ordinary action metadata and reroll counts. Sitting out preserves queued entries; folded/removed NPCs skip rerolls. Future queue edits leave current plans intact. Loaded slots retain their loaded odds while consuming their paired scripted face without shifting the following replacements.
+- Updated the default queue, in-app instructions/examples, GM pending-plan indicator, protocol and gameplay guide.
+
+Actual checks:
+
+- Focused pure automatic-reroll tests: **19 passed** (integration case deselected for this run).
+- Full suite with isolated PostgreSQL plus SQLite: **111 passed, 1 expected skip**, one existing upstream Starlette/AnyIO warning. Covers malformed plans, authorization, unsorted slot pairing, automatic stand pat and chains, human/manual stops, skipped/folded/removed seats, loaded slots, future-queue edits, private projection, persistence and replay without duplicate rerolls.
+- Full Chromium browser run: **9 passed**. New acceptance covers two queued NPCs automatically completing their selections/standing pat, exact resulting GM-visible faces, hidden faces for humans, human-turn preservation, reload, and manual Betting 2. Existing overlay, participation, summary, cheating, phase/rules/layout and three-hand multiplayer scenarios all pass.
+- TypeScript: passed; endpoint checks: **12 passed**. Production web and MV3 builds use the live public HTTPS/WSS API; ZIP integrity, new instructions/feature content, endpoint and storage-only permissions verified.
+
+Existing stored rooms require no schema migration. Existing queue entries need `rerollIndexes` and matching replacements added to enable automation. No production rooms, Railway services or deployment settings were changed; no commit or push was performed for this feature. Deploy API before web, then reload the rebuilt extension and Roll20.
+
+
+## Belwether streamlined joining (2026-10-24)
+
+Implemented the persistent `belwether` campaign alias, public availability and player joining, remembered server-authorized DM access, serialized/idempotent fresh-session creation, and retained finished-session summaries. Players still enter name, starting GP and session-locked Dexterity. The extension defaults to Belwether and saves credentials only in isolated extension storage. Website links use `?room=belwether` and optionally `&isdm=1`; the flag selects presentation only. Existing manual room/recovery remains available.
+
+Campaign mappings and hashed credentials persist in a new automatically created table. Player retries combine a private client nonce with a persistent server-generated salt to recover the same seat without duplicating it or overwriting balances/stats. No host creation secret is saved. Fresh sessions retain previous rooms and require the current session to be finished. Migration copies campaign mappings transactionally when present.
+
+Actual verification:
+
+- `PYTHONPATH=server TEST_DATABASE_URL=... .venv/bin/pytest server/tests -q`: **123 passed, 1 expected skip**, using isolated SQLite/PostgreSQL databases. Includes campaign authorization, URL-flag rejection, privacy, duplicate joins, concurrent session starts, stale-session rejection, seat limits, history and migration preservation. One existing upstream Starlette/AnyIO warning remains.
+- Full Chromium browser suite: **12 scenarios passed** (recorded passed in `test-results/.last-run.json`), including the new website campaign flow, lost-response recovery, built extension campaign defaults, isolated credentials and remembered DM access. Final targeted campaign/extension rerun after adding server-generated join entropy: **4 passed**.
+- `pnpm typecheck`: passed. Endpoint contract checks passed. Production `pnpm build` with the live public HTTPS/WSS API endpoints passed; unpacked extension and ZIP rebuilt. ZIP integrity, campaign content, production endpoint and storage-only permissions verified. `git diff --check`: passed.
+
+No production rooms, services or deployment settings were changed. Deploy API first (creates the campaigns table automatically), then web; reload the rebuilt extension and Roll20. No new environment variables are required. Unlock with the existing host invitation secret once per browser/extension surface. Existing random-ID rooms remain available through manual recovery. Live Roll20/Edge verification and Railway rollout remain manual; no push, deployment or commit was performed for this update.

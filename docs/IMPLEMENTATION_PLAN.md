@@ -21,3 +21,15 @@ Status: all implementation slices are complete. PostgreSQL/session and browser c
 5. Verify money conservation, arbitrary-seat removal, turn advancement, authorization, old-room compatibility, retries/reload, preset persistence, final summary, responsive layout, and production web/extension builds. No production database or deployment changes.
 
 Live table slice status: implemented and verified. SQLite/PostgreSQL suite: 90 passed, 1 expected skip; eight browser scenarios pass across full/targeted runs. TypeScript, endpoint checks and live-endpoint production bundles pass. No production deployment or game-data mutation performed.
+
+## Automatic queued NPC rerolls
+
+Extend queued hands with validated rerollIndexes and a matching replacement list. Execute due scripted NPC rerolls server-side after normal commands, in seat order and within the same transactional receipt. Stop at human/manual turns; handle chained NPCs and automatic standing pat. Keep plans/faces and detailed execution audits GM-only, publish only ordinary reroll counts, preserve opted-out queues and loaded-die odds, and leave old entries without selections manual. Update instructions/examples, test validation/privacy/retries/reload/order, and rebuild production site/extension. No live deployment or game changes.
+
+Automatic reroll status: complete. Full SQLite/PostgreSQL suite 111 passed (1 expected skip), all 9 browser scenarios passed, TypeScript and 12 endpoint checks passed. Production web/extension bundles and ZIP verified; no deployment or production data changes.
+
+## Belwether streamlined room access
+
+Add a persistent server-side belwether alias pointing at the current room, with separately hashed remembered DM credentials and retained previous room ledgers. Player alias joins keep name/gold/Dexterity but need no room/invite entry, with durable idempotent join recovery. Require the existing host secret once per DM device; isdm=1 only chooses UI mode. A fresh session requires an ended prior session and uses serialized/idempotent campaign commands. Make the extension default to this room, keep extension credentials in isolated storage, and support the stable website link and legacy manual recovery. Verify unauthorized DM access, concurrent session creation, retries, session switching, refresh/reconnect, private projections and built overlay; update deployment/setup docs and production bundles. No live state changes or deployment.
+
+Belwether status: implemented. Full SQLite/PostgreSQL suite: 123 passed, 1 expected skip; full Chromium suite: 12 passed. TypeScript, endpoint checks, production website/extension builds and ZIP verification passed. No deployment or production-data mutation performed; final targeted browser verification is recorded in tests/RESULTS.md.

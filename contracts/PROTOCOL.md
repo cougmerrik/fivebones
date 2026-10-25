@@ -45,7 +45,7 @@ The MVP sends complete role-specific `snapshot` frames after accepted/rejected c
 
 Phases FIRST_ROLL/ANTE_COLLECTION/SHOWDOWN/SETTLEMENT are atomic transitions inside a command. Stable phases are LOBBY, BETTING_1, REROLL, BETTING_2, ADJUDICATION, READY_NEXT_HAND. Showdown dice and rank labels stay visible in READY_NEXT_HAND for nonfolded showdown participants. Uncontested settlements do not reveal opposing dice. Active-seat connected flags are transport-derived, not game actions; they do not increment room version or cause automatic folds.
 
-`forceFold {confirmed:true}` requires GM authority and acts only on the current seat; UI asks the GM to explicitly confirm. `adjudicate {reason}` only refunds original contributions in ADJUDICATION. `scriptNPC {seatId,queue:[{initial:[1,2,3,4,5],replacements:[6]}]}` is GM-only, retains a private audit record and never modifies human dice. `takeNPCAction {action,data:{...}}` wraps only ordinary legal actions for the current NPC.
+`forceFold {confirmed:true}` requires GM authority and acts only on the current seat; UI asks the GM to explicitly confirm. `adjudicate {reason}` only refunds original contributions in ADJUDICATION. `scriptNPC {seatId,queue:[{initial:[1,2,3,4,5],rerollIndexes:[4],replacements:[6]}]}` is GM-only, retains a private audit record and never modifies human dice. `takeNPCAction {action,data:{...}}` wraps only ordinary legal actions for the current NPC.
 
 Unknown action-data keys are rejected (including supplied amounts, winners or dice arrays in ordinary commands). Explicit cheat/GM-edit commands below allow validated die slots/faces under the campaign amendment. Command receipts are scoped to authenticated credentials and command ID and persist across restarts. Reusing an ID returns its original acknowledgment; a rejected command requires a new ID after addressing its error. Stale expectedVersion yields CONFLICT without a monetary mutation. Successful commands increment room version once.
 
@@ -82,3 +82,25 @@ All new NPC actions retain optimistic version checks and durable, per-credential
 Snapshots include public seat `nextHand` and `removed` flags; old rooms default to true/false. `lastTurn` is a server-authored public recap that survives reconnect/restart. Private actions do not update this field. Existing receipt/version semantics apply to all controls.
 
 NPC presets are browser/extension-local configuration templates with name, opening gold, and Dexterity. They contain no tokens, live balances, hidden dice, or scripts; seating a template still uses the GM-authorized server command. Web uses localStorage; the extension uses isolated chrome.storage.local.
+
+
+## Automatic NPC reroll plans
+
+`scriptNPC` queue entries optionally accept `rerollIndexes:[0,4]` alongside `initial` and `replacements:[6,2]`. Indexes must be unique strict integers 0–4, at most five, with exactly the same number of replacements (strict faces 1–6). Empty indexes/replacements explicitly stand pat. Missing indexes preserve legacy manual behavior.
+
+At hand start, an entering NPC consumes one queue entry and saves its private current-hand selection. After accepted commands, the engine drains current scripted NPC reroll turns in order via the same one-shot reroll validation/advancement. No separate client action, timer, background worker, or betting automation is involved. The triggering command increments the room version once and its receipt covers the entire automatic chain.
+
+GM-only NPC snapshots may include `autoReroll:{indexes,replacements}` while an eligible current-hand plan is pending. Human/spectator projections never contain this field, NPC queues, or the `npcAutoReroll` audit details. Public events contain the normal count and action metadata only; recap text names the NPC and count without faces/indexes. Each execution adds a GM-private audit with original and resulting NPC dice plus the authorized selection/replacements.
+
+## Permanent campaign alias
+
+`belwether` is an intentionally public-to-the-campaign player entrypoint, pointing at a current ordinary room. It never authorizes GM access by name or URL flag. The server creates a separate `campaigns` table automatically, with alias/current-room mapping, hashed DM credentials, and idempotent session-start receipts. Previous room aggregates and ledgers are retained.
+
+- `GET /api/v1/campaigns/belwether`: public availability, current room ID, ended/canJoin flags, stable player URL. No private state, invite/seat/DM token or script is returned.
+- `POST .../dm-access {hostSecret}`: validates the configured host secret, issues a separate campaign DM credential, and authorizes it for the current room. Reauthorization is idempotent for the same configured host secret and does not accumulate GM credentials. The secret is never persisted in the database or browser. Local development with an empty configured secret uses a private random process key rather than a predictable derived credential.
+- `GET .../dm-session`: Bearer campaign DM credential required; returns that owner's current room session, or null before a session exists. `isdm=1` is not consulted by authorization.
+- `POST .../sessions {id,expectedRoomId,smallBetCp}`: Bearer campaign DM credential required. Serializes alias updates, requires the prior room to be ended (or absent/deleted), retains prior rooms, and returns the new ordinary GM session. Duplicate IDs return the original session; stale alias bindings reject `CAMPAIGN_CHANGED`.
+- `POST .../join {expectedRoomId,joinKey,name,startingCp,dexterity}`: joins a player without manually supplying an invite. The private 32-byte random join key is sent only in the TLS body and retained locally until the join response is stored. The server combines it with a private, persistent, server-generated room salt using HMAC to derive a player token, stores only its hash, and recovers the same seat on retry without resetting gold/stats. A changed room binding or mismatched replay details rejects; new seats still join only between hands and obey seat/funding/ability limits.
+- `GET .../history`: Bearer campaign DM credential required; returns completed campaign room IDs, hand counts and opening/final participant totals only, without private dice, ability scores, audit or tokens.
+
+The extension uses isolated chrome.storage.local for alias player sessions, pending retry keys, DM credentials and chosen role. The website stores them under an API/alias-scoped key separate from legacy room sessions. Existing seat authorization and all game commands remain server-side. Old room/invite links and manual recovery remain available.

@@ -72,12 +72,16 @@ def test_sqlite_migration_to_postgres(client,tmp_path,monkeypatch,capsys):
     with sqlite3.connect(source) as c:
         c.execute('CREATE TABLE rooms (id TEXT PRIMARY KEY,state TEXT,credentials TEXT,invite TEXT,created REAL)')
         c.execute('INSERT INTO rooms VALUES (?,?,?,?,?)',('migration-room',json.dumps({'privateDice':[1,2,3,4,5]}),'{"hashed-token":{"gm":true}}','invite-hash',1234.56789))
+        c.execute('CREATE TABLE campaigns (alias TEXT PRIMARY KEY,room_id TEXT,credentials TEXT,receipts TEXT)')
+        c.execute('INSERT INTO campaigns VALUES (?,?,?,?)',('belwether','migration-room','{"hashed-dm-token":{"gm":true}}','{"start-command":"migration-room"}'))
     monkeypatch.setenv('DATABASE_URL',m.DATABASE_URL)
     monkeypatch.setattr(sys,'argv',['migrate','--source-sqlite',str(source),'--confirm'])
     migrate.main()
     with m.db() as c:
         row=c.execute('SELECT state,credentials,created FROM rooms WHERE id=?',('migration-room',)).fetchone()
         assert json.loads(row[0])['privateDice']==[1,2,3,4,5] and row[2]==1234.56789
+        campaign=c.execute('SELECT room_id,credentials,receipts FROM campaigns WHERE alias=?',('belwether',)).fetchone()
+        assert campaign[0]=='migration-room' and 'hashed-dm-token' in json.loads(campaign[1]) and json.loads(campaign[2])['start-command']=='migration-room'
     assert 'Migrated 1 rooms' in capsys.readouterr().out
     from sqlalchemy.exc import IntegrityError
     with pytest.raises(IntegrityError):migrate.main()

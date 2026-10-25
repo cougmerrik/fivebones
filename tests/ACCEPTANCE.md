@@ -44,3 +44,21 @@
 ## Required Codex output
 
 Show command lines that were run; report number of passing tests; describe any test requiring user-run Roll20 UI. Do not report unperformed tests as passed. Track all MVP house-rule defaults in a README section.
+
+
+## Queued automatic NPC rerolls
+
+- [ ] GM can queue initial faces, unique zero-based selected slots, and matching replacements; invalid shapes/indices/counts reject atomically.
+- [ ] Consecutive planned NPCs reroll/stand pat automatically once, in order; human and manual NPC turns wait for input and betting stays manual.
+- [ ] Plans are GM-only, public counts are correct, loaded-slot replacement pairing is stable, and folded/removed/sitting-out seats behave correctly.
+- [ ] Lost acknowledgments, reload/reconnect and server recovery cannot duplicate an automatic reroll; current plans survive future queue edits.
+
+
+## Belwether quick joining
+
+- [x] Player link and default extension panel retain name/GP/Dexterity with no manual room/invite entry.
+- [x] DM flag alone cannot authorize control; the host key authorizes remembered server credentials.
+- [x] Refresh and lost join responses recover the same seat without duplicate entry or changed balances/stats.
+- [x] Concurrent fresh-session requests create one session; finished-session histories remain available behind unchanged links.
+- [x] Built extension keeps player/DM credentials isolated from Roll20 page storage and leaves sheet values unchanged in the controlled browser test.
+- [ ] Verify the updated extension and stable links in the actual Roll20 campaign and Edge after rollout.

@@ -156,8 +156,16 @@ PYTHONPATH=server .venv/bin/python -m app.admin rotate-host --room ROOM_ID --con
 PYTHONPATH=server .venv/bin/python -m app.admin purge --days 30 --confirm
 ```
 
-Inside the API image, omit `PYTHONPATH=server .venv/bin/` and use `python -m app.admin ...`. Rotation prints a new private recovery token and invalidates old GM credentials. Purge removes only ended rooms old enough by creation date. Manage exported files and backup retention separately. There is no public reset or administration route. Future incompatible schema changes require an explicit migration; current initialization only creates the existing table when absent.
+Inside the API image, omit `PYTHONPATH=server .venv/bin/` and use `python -m app.admin ...`. Rotation prints a new private recovery token and invalidates old GM credentials. Purge removes only ended rooms old enough by creation date. Manage exported files and backup retention separately. There is no public reset or administration route. Future incompatible schema changes require an explicit migration; current initialization creates missing tables without modifying existing room rows.
 
 The local builds/tests and their limitations are recorded in [tests/RESULTS.md](tests/RESULTS.md). GitHub-hosted CI and live Railway deployment run only after you push/connect the repository; they have not been performed by the local checks.
 
 Reference: Railway's official [monorepo guide](https://docs.railway.com/guides/monorepo), [Dockerfile guide](https://docs.railway.com/guides/dockerfiles), [configuration reference](https://docs.railway.com/reference/config-as-code), [health checks](https://docs.railway.com/guides/healthchecks), and [PostgreSQL guide](https://docs.railway.com/guides/postgresql).
+
+## Belwether quick-join rollout
+
+No additional environment variables, services or browser permissions are needed. Keep the existing production `HOST_INVITE_SECRET`, `APP_BASE_URL`, public API/WSS endpoints and origin lists. The API automatically creates the new `campaigns` table on startup (existing rooms are untouched); the SQLite-to-PostgreSQL migration tool also copies campaign mappings if present.
+
+Deploy API first, then rebuild/deploy web and rebuild/reload the extension. Open `https://fivebonesweb-production.up.railway.app/?room=belwether&isdm=1`, or use **DM access** in the overlay. Enter the existing host secret once in **DM access key**, choose **Remember DM access**, then **Start belwether session**. The normal extension panel and `https://fivebonesweb-production.up.railway.app/?room=belwether` now resolve that room automatically for players, retaining their name/GP/Dexterity form.
+
+After ending a session, **Start fresh belwether session** keeps those links stable and retains previous ledgers/summaries. Existing noncampaign rooms are not adopted or deleted automatically; use manual recovery for them. The `isdm=1` flag only selects the DM screen and never grants authority. Website and extension keep separate saved credentials, so unlock DM access once in each surface you use. Keep production PostgreSQL backups of both rooms and campaigns.

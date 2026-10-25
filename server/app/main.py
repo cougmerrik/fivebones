@@ -242,3 +242,7 @@ async def socket(ws:WebSocket,rid:str):
         except (HTTPException,SQLAlchemyError): pass
         try: await ws.close()
         except RuntimeError: pass
+
+# Import after the room handlers; campaign endpoints use the same store and auth.
+from .campaigns import router as campaign_router
+app.include_router(campaign_router)

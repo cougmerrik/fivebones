@@ -11,7 +11,7 @@ Five Bones uses fictional campaign gold. The authoritative rules are in [spec/RU
 - Widowmaker is exactly 6,6,6,1,1. It loses to every non-Widowmaker at showdown, but wins uncontested. All-Widowmaker showdowns pause for GM adjudication: the MVP adjudication refunds each contribution, requires a reason, and logs it. Arbitrary client-selected payouts are never accepted.
 - Configuration is fixed per room. Creation API accepts `anteCp` (0 through small bet), `ties` (`kickers` or `category`) and `remainder` (`clockwise` or `counterclockwise`); the host form exposes these options. Core conventions are centralized in `server/app/engine.py`; future campaign decisions can replace them with tests.
 - Disconnect never causes an automatic action. A disconnected actor pauses the game. The GM can explicitly confirm a force-fold. Reconnect restores the seat's private state.
-- GM can authorize up to ten NPC scripted initial rolls, each with up to five replacement faces. Partial replacement streams fall back to secure RNG. Script authorization retains a durable GM-only audit record; public log contains authorization metadata only. Human dice cannot be scripted. NPC decisions are manual GM actions, not an automated betting strategy.
+- GM can authorize up to ten NPC scripted initial rolls, each with up to five replacement faces. Partial replacement streams fall back to secure RNG. Script authorization retains a durable GM-only audit record; public log contains authorization metadata only. Human dice cannot be scripted. NPC wagers are manual GM actions; explicitly queued reroll selections may execute automatically. There is no automated betting strategy.
 - Skills, tournament automation, optional sheet import, sound and NPC personalities are deferred.
 
 ## Private cheating and DM adjudication
@@ -50,24 +50,40 @@ The GM has per-seat **Remove … from play** and **Restore …** controls. Remov
 
 Under **settings → Saved NPC presets**, fill in the NPC name, starting GP and Dexterity and click **Save NPC preset**. Choose a saved name and click **Load NPC preset** to fill the form, then **Seat NPC** to add it to this room. Saving an existing name updates that template. Templates persist across rooms in this browser or extension; website and extension storage are separate. They do not carry a previous NPC's final balance, dice, scripts, or active seat identity into a new game.
 
-## Queued NPC rolls
+## Queued NPC rolls and automatic rerolls
 
 1. Seat an NPC and open **settings → Authorize scripted NPC rolls (audit logged)**.
-2. Select that NPC. Enter a JSON list, one entry for each future hand the NPC will enter:
+2. Select that NPC. Enter a JSON list, one entry for each future hand it will enter:
 
 ```json
 [
-  {"initial": [2, 2, 2, 4, 6], "replacements": [2, 5]},
-  {"initial": [1, 2, 3, 4, 5], "replacements": []}
+  {"initial": [2, 2, 2, 4, 6], "rerollIndexes": [3, 4], "replacements": [2, 2]},
+  {"initial": [1, 2, 3, 4, 5], "rerollIndexes": [], "replacements": []}
 ]
 ```
 
-3. Click **Authorize NPC queue**. Authorization replaces the remaining queue and is recorded privately for the GM. Enter `[]` to clear it.
-4. Start the next hand. Its first entry supplies the NPC's five initial dice; the following entry is saved for its next participating hand. Sitting out does not consume an entry.
-5. Play the NPC's betting turn normally. During its one reroll, choose dice to replace. Replacement values are used left to right in your submitted index order; extra selected dice use fair server rolls after the stream runs out. A loaded slot uses the loaded probability instead of consuming a scripted replacement.
+The first entry starts with three twos. When this NPC reaches its reroll turn, the server replaces **dice 4 and 5** with **2 and 2**, producing five twos. `rerollIndexes` is zero-based: 0 means die 1, 1 means die 2, through 4 meaning die 5. Each index is paired with the replacement at the same position. For example, indexes `[4, 1]` with replacements `[6, 3]` sets die 5 to 6 and die 2 to 3; no sorting is applied.
 
-An initial roll needs exactly five integers from 1 through 6. Each replacement list may contain zero through five such integers; the queue may contain up to ten hands. Script authorization does not change a hand already in progress. Opponents cannot see queued faces. The GM still decides NPC wagers, folds and reroll selections; queues do not automate those actions.
+The second entry keeps its straight: empty indexes and replacements make it **stand pat automatically**.
+
+3. Click **Authorize NPC queue**. This replaces the remaining queue and records the plan privately for the GM. Enter `[]` as the entire queue to clear it.
+4. Start the next hand. Its first entry supplies the initial dice and that hand's reroll plan; sitting out does not consume an entry. The GM sees a private automatic-reroll indicator on the NPC card.
+5. Continue making that NPC's betting decisions. When its reroll turn arrives, the **server executes the queued selection and replacements automatically**, then advances. Consecutive scripted NPCs are processed in seat order, stopping at a human or a manually controlled NPC. If everyone has rerolled, Betting 2 begins immediately. The GM still controls all betting, folding, and private cheat choices.
+
+Each initial roll must contain exactly five integers from 1 through 6. An automatic plan needs zero through five unique indexes from 0 through 4 and **exactly one valid replacement face per index**. Missing or extra replacement faces reject the plan. Up to ten hands may be queued.
+
+A loaded die retains its 33% chance of a five. Its paired scripted face is consumed but ignored; the next selected slot still gets its own paired replacement. Folded/removed NPCs never execute a reroll. Current-hand plans survive reload and are not changed by authorizing a different future queue. Automatic execution, turn advancement and audit are persisted in the triggering command's transaction, so reconnects and command retries cannot reroll twice. Opponents see only the normal reroll count; selections, faces and detailed audits stay GM-only until legal showdown.
+
+**Existing queues:** entries without `rerollIndexes` retain the previous manual reroll and replacement-stream behavior. Add `rerollIndexes` and matching replacements to enable automation; the app does not guess which dice an old replacement stream was intended to replace. Legacy manual streams can still fall back to fair server dice when replacements run out.
 
 ## Turn and session recaps
 
 **What just happened** appears above the current turn and describes the last public action. It uses the authoritative server state and never exposes private cheat details. When the GM chooses **End session** between hands, the main game area shows every participant's starting/final gold and signed net, with copyable settlement text and GM CSV download. Completed summaries survive reload.
+
+## Joining the permanent Belwether room
+
+The Roll20 extension supplies the room automatically. Players enter name, starting GP and Dexterity and press **Join belwether**. The standalone equivalent is `/?room=belwether`. No invite-code entry is needed for this campaign flow. A saved credential resumes an existing seat; name alone never recovers another player's seat.
+
+The DM uses `/?room=belwether&isdm=1` or the overlay's **DM access** button. Enter the host invitation secret once per browser/extension surface and choose **Remember DM access**. The app remembers a derived DM credential, not the host secret. `isdm=1` selects the screen and is never authorization.
+
+After finishing the current session, use **Start fresh belwether session**. The alias moves to a fresh ledger without deleting the old one. Players viewing a finished game get **Join new belwether session** and re-enter their character details/current gold. DM **Previous session summaries** retains the completed campaign results. Existing random-ID rooms can still be reached through manual connection/recovery.

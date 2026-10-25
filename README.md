@@ -10,7 +10,7 @@ Five Bones uses fictional campaign gold. Dice, turns, private actions, and the l
 - Five dice, two fixed-limit betting rounds, one reroll opportunity, showdown, and the Widowmaker rule.
 - A compact phase tracker, centered dice, orientation-specific backgrounds, and the supplied title and dice artwork.
 - Private Dexterity-based cheating: Loaded die, Change die, or a written action for DM adjudication. NPCs use the same checks; the DM has audited dice corrections.
-- Next-hand opt-in/out, GM removal/restoration, reusable NPC presets, and a public last-turn recap.
+- Next-hand opt-in/out, GM removal/restoration, reusable NPC presets, queued automatic NPC rerolls, and a public last-turn recap.
 - Live gold/net summaries, a final session summary in the game area, settlement text, and GM CSV export.
 - An in-app **Hands & rules** reference and an optional movable, resizable Roll20 overlay.
 
@@ -62,6 +62,15 @@ source .env
 set +a
 pnpm dev
 ```
+
+## Belwether quick join
+
+The extension automatically finds the current Belwether session. Players enter **name, starting GP and Dexterity → Join belwether**; room IDs and invite codes are filled by the campaign flow.
+
+- [Player link](https://fivebonesweb-production.up.railway.app/?room=belwether)
+- [DM link](https://fivebonesweb-production.up.railway.app/?room=belwether&isdm=1)
+
+The DM enters the existing host invitation secret once under **DM access**, then the browser/extension remembers a separate private credential. The URL flag only selects the DM screen. Finish a session and choose **Start fresh belwether session** to reuse the same link with a new ledger. Previous summaries remain available. See [extension setup](docs/EXTENSION.md) for the full flow and manual recovery for older rooms.
 
 ## Play a session
 
