@@ -1,4 +1,5 @@
 import React from 'react';
+import {BackgroundMusic} from '../packages/ui/BackgroundMusic';
 import {createRoot} from 'react-dom/client';
 import {FiveBonesApp} from '../packages/ui/App';
 import {CampaignApp} from '../packages/ui/CampaignApp';
@@ -11,7 +12,7 @@ try {
  resolveEndpoints(api,ws,location.protocol);
  const params=new URLSearchParams(location.search);
  const campaign=params.get('room')==='belwether'||params.get('isdm')==='1';
- createRoot(root).render(campaign?<CampaignApp api={api} wsApi={ws} dmMode={params.get('isdm')==='1'}/>:<FiveBonesApp api={api} wsApi={ws}/>);
+ createRoot(root).render(<div className="music-surface"><BackgroundMusic/>{campaign?<CampaignApp api={api} wsApi={ws} dmMode={params.get('isdm')==='1'}/>:<FiveBonesApp api={api} wsApi={ws}/>}</div>);
 } catch(error) {
  root.setAttribute('role','alert');
  root.textContent='Unable to connect: '+String(error)+'. Check the public API and WebSocket build variables.';

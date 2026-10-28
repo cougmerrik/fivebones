@@ -144,3 +144,5 @@ tests/               Browser acceptance, smoke checks, and verification records
 The original PNG artwork is committed at the repository root and bundled into the website and extension. Dependencies, generated bundles/ZIPs, databases, and real `.env` files stay out of Git. Commit `.env.example` files as configuration templates.
 
 Released under the [Apache License 2.0](LICENSE).
+
+Background music uses the supplied `music.mp3`, loops, and attempts to play when the app loads. If the browser blocks autoplay, playback starts on the first interaction with the app. Use **Disable music** at the top left to pause it and **Enable music** to resume. This control is shared by the website and Roll20 overlay; the choice lasts until the page reloads. The bundled MP3 is encoded at 96 kbps for repository hosting; the full track loops without being shortened. The original source is kept locally as ignored `music.original.mp3`.

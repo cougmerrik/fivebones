@@ -19,3 +19,9 @@ House defaults follow spec/RULES.md. Configurable ante, kicker-versus-category t
 - M5: Development/build/test and container deployment instructions supplied. Docker images build and the running containers pass actual API restart/private-state recovery/idempotent retry checks; evidence is recorded in tests/RESULTS.md.
 
 No skill actions, tournament automation, demo accounts, dev reset HTTP routes, sheet writes or Roll20 internal access were added.
+
+## Background music
+
+- Mount a shared looping music player once per web/overlay surface, with a top-left disable/enable button and browser autoplay interaction fallback.
+- Bundle the supplied MP3 for Vite, MV3 and Docker; verify types, builds and browser playback/mute behavior.
+- Verified: TypeScript, web production build, extension build/ZIP (MP3 included), and browser playback/pause/resume test pass. Browser test used `CHROMIUM_EXECUTABLE=/home/merrik/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome` because the project-pinned browser is not installed. Live Roll20 and a Docker image build were not run for this change.

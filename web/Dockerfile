@@ -11,6 +11,7 @@ COPY web ./web
 COPY packages ./packages
 COPY *_bg.png ./
 COPY title.png ./
+COPY music.mp3 ./
 COPY pip*.png ./
 ARG VITE_API_BASE_URL=http://localhost:8000
 ARG VITE_WS_BASE_URL=

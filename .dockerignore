@@ -12,3 +12,5 @@ node_modules
 extension/*.zip
 test-results
 playwright-report
+
+/music.original.mp3

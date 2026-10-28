@@ -11,6 +11,6 @@ if not all(path.is_file() for path in required):
     raise SystemExit('Build the unpacked extension first')
 with ZipFile(archive,'w',compression=ZIP_DEFLATED) as package:
     for path in sorted(out.rglob('*')):
-        if path.is_file() and (path.name in ('manifest.json','content.js') or path.suffix=='.png'):
+        if path.is_file() and (path.name in ('manifest.json','content.js') or path.suffix in ('.png','.mp3')):
             package.write(path,path.relative_to(out))
 print(f'Unpacked: {out}\nZIP: {archive}')
